@@ -31,13 +31,9 @@ pub struct MacOSConfigurationRequirements {
 
 /// Shim object-completion trampoline: consumes the boxed sender exactly once.
 ///
-/// If the receiver is gone (cancelled operation), the +1 handle is released
-/// here so the object doesn't leak. Shared with `usb::UsbController::attach`.
-pub(crate) unsafe extern "C" fn object_trampoline(
-    ctx: *mut c_void,
-    handle: *mut c_void,
-    err: *mut c_char,
-) {
+/// If the receiver is gone (cancelled load), the +1 handle is released here
+/// so the object doesn't leak.
+unsafe extern "C" fn object_trampoline(ctx: *mut c_void, handle: *mut c_void, err: *mut c_char) {
     // SAFETY: ctx is the Box<Sender> leaked by the caller; the shim
     // guarantees exactly-once invocation. err is null or a shim string.
     unsafe {

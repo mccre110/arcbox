@@ -208,6 +208,7 @@ fn run() -> Result<(), String> {
         guest_cid: Some(GUEST_CID),
         balloon: knobs.balloon,
         block_devices,
+        usb: false,
         // The daemon's System VM carries a second (bridge) NIC; a fixed
         // locally-administered MAC is enough to materialize the device.
         bridge_nic_mac: knobs.bridge.then(|| "02:AB:CD:00:00:99".to_string()),

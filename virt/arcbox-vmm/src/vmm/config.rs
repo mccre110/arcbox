@@ -57,6 +57,13 @@ pub struct VmmConfig {
     pub balloon: bool,
     /// Block devices to attach to the VM.
     pub block_devices: Vec<BlockDeviceConfig>,
+    /// Enable a USB (XHCI) controller for USB passthrough.
+    ///
+    /// VZ backend only, and only effective when the host supports USB
+    /// passthrough (macOS 27+ Accessory Access); silently skipped otherwise.
+    /// Granted host accessories are hot-plugged at runtime via
+    /// [`Vmm::attach_usb_device`](crate::Vmm::attach_usb_device).
+    pub usb: bool,
     /// Optional MAC address for the bridge NAT NIC on macOS.
     pub bridge_nic_mac: Option<String>,
     /// VM backend selection (macOS only).
@@ -92,6 +99,8 @@ impl Default for VmmConfig {
             guest_cid: None,
             balloon: true, // Enable balloon by default for memory optimization
             block_devices: Vec::new(),
+            usb: true, // Controller is cheap; actual passthrough is user-driven
+
             bridge_nic_mac: None,
             backend: VmBackend::default(),
             debug_console_socket: None,

@@ -78,6 +78,7 @@ fn main() {
             path: rootfs_path.clone(),
             read_only: true,
         }],
+        usb: false,
         bridge_nic_mac: None,
         backend: arcbox_vmm::VmBackend::Hv, // Force HV backend
         debug_console_socket: None,

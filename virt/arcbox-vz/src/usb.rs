@@ -4,19 +4,20 @@
 //! Accessory Access UI. A process-lifetime listener (registered once via
 //! [`register_accessory_listener`]) delivers connect/disconnect events;
 //! granted accessories are hot-plugged into a running VM through
-//! [`UsbController::attach`] and removed with [`UsbController::detach`].
+//! [`UsbController::attach_blocking`] and removed with
+//! [`UsbController::detach_blocking`].
 //!
 //! Requires macOS 27+ and a binary built against the macOS 27 SDK; every
-//! entry point returns [`VZError::NotSupported`]-style errors otherwise
-//! (probe with [`crate::usb_passthrough_supported`]).
+//! entry point returns [`VZError`]s otherwise (probe with
+//! [`crate::usb_passthrough_supported`]).
 
 use crate::error::{VZError, VZResult};
-use crate::restore::object_trampoline;
 use crate::shim_ffi;
 use crate::vm::state_trampoline;
 use std::ffi::{c_char, c_void};
-use tokio::sync::mpsc;
-use tokio::sync::oneshot;
+use std::sync::mpsc as std_mpsc;
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot};
 
 /// Identity of a USB accessory as reported by the host.
 #[derive(Debug, Clone)]
@@ -146,6 +147,46 @@ pub async fn register_accessory_listener() -> VZResult<mpsc::UnboundedReceiver<U
     Ok(event_rx)
 }
 
+/// Exactly-once attach trampoline: consumes the boxed sender.
+///
+/// The result carries the [`UsbDevice`] so every abandonment path (dropped
+/// receiver, or a buffered value in a channel no one reads) releases the +1
+/// device handle via `UsbDevice`'s Drop.
+unsafe extern "C" fn usb_attach_trampoline(
+    ctx: *mut c_void,
+    handle: *mut c_void,
+    err: *mut c_char,
+) {
+    // SAFETY: ctx is the Box<Sender> leaked in attach_blocking; the shim
+    // guarantees exactly-once invocation. err is null or a shim string that
+    // take_error_string frees.
+    unsafe {
+        let sender = Box::from_raw(ctx.cast::<std_mpsc::Sender<Result<UsbDevice, String>>>());
+        let result = if err.is_null() {
+            Ok(UsbDevice { device_box: handle })
+        } else {
+            Err(shim_ffi::take_error_string(err))
+        };
+        let _ = sender.send(result);
+    }
+}
+
+/// Exactly-once detach trampoline: consumes the boxed sender.
+unsafe extern "C" fn usb_detach_trampoline(ctx: *mut c_void, err: *mut c_char) {
+    // SAFETY: ctx is the Box<Sender> leaked in detach_blocking; the shim
+    // guarantees exactly-once invocation. err is null or a shim string that
+    // take_error_string frees.
+    unsafe {
+        let sender = Box::from_raw(ctx.cast::<std_mpsc::Sender<Result<(), String>>>());
+        let result = if err.is_null() {
+            Ok(())
+        } else {
+            Err(shim_ffi::take_error_string(err))
+        };
+        let _ = sender.send(result);
+    }
+}
+
 /// A runtime USB controller on a running VM.
 ///
 /// Every operation dispatches onto the VM's serial queue inside the shim
@@ -168,48 +209,55 @@ impl UsbController {
         Self { controller_box }
     }
 
-    /// Attaches a granted accessory to this controller (hot-plug).
+    /// Attaches a granted accessory to this controller (hot-plug), blocking
+    /// until the framework confirms or `timeout` elapses.
     ///
-    /// Returns the attached device, needed later for [`detach`](Self::detach).
+    /// Returns the attached device, needed later for
+    /// [`detach_blocking`](Self::detach_blocking).
     ///
     /// # Errors
     ///
     /// Returns an error when the framework rejects the attach (unsupported
-    /// device type, accessory revoked, VM not running, ...).
-    pub async fn attach(&self, accessory: &UsbAccessory) -> VZResult<UsbDevice> {
-        let (tx, rx) = oneshot::channel::<Result<usize, String>>();
+    /// device type, accessory revoked, VM not running, ...) or on timeout.
+    pub fn attach_blocking(
+        &self,
+        accessory: &UsbAccessory,
+        timeout: Duration,
+    ) -> VZResult<UsbDevice> {
+        let (tx, rx) = std_mpsc::channel::<Result<UsbDevice, String>>();
         let ctx: *mut c_void = Box::into_raw(Box::new(tx)).cast();
         // SAFETY: both handles are valid; ctx ownership transfers to the
-        // exactly-once trampoline, which releases the +1 device handle if
-        // the receiver is gone.
+        // exactly-once trampoline. A timed-out receiver is leak-free: the
+        // trampoline's send fails (or the buffered UsbDevice drops with the
+        // channel) and the +1 device handle is released either way.
         unsafe {
             shim_ffi::abx_usb_controller_attach(
                 self.controller_box,
                 accessory.handle,
                 ctx,
-                object_trampoline,
+                usb_attach_trampoline,
             );
         }
 
-        let bits = rx
-            .await
-            .map_err(|_| VZError::Internal {
-                code: -1,
-                message: "USB attach cancelled".into(),
-            })?
-            .map_err(|msg| VZError::OperationFailed(format!("USB attach failed: {msg}")))?;
-        Ok(UsbDevice {
-            device_box: bits as *mut c_void,
-        })
+        match rx.recv_timeout(timeout) {
+            Ok(Ok(device)) => Ok(device),
+            Ok(Err(msg)) => Err(VZError::OperationFailed(format!(
+                "USB attach failed: {msg}"
+            ))),
+            Err(_) => Err(VZError::Timeout(format!(
+                "USB attach timed out after {timeout:?}"
+            ))),
+        }
     }
 
-    /// Detaches a previously attached device (hot-unplug).
+    /// Detaches a previously attached device (hot-unplug), blocking until
+    /// the framework confirms or `timeout` elapses.
     ///
     /// # Errors
     ///
-    /// Returns an error when the framework rejects the detach.
-    pub async fn detach(&self, device: &UsbDevice) -> VZResult<()> {
-        let (tx, rx) = oneshot::channel::<Result<(), String>>();
+    /// Returns an error when the framework rejects the detach or on timeout.
+    pub fn detach_blocking(&self, device: &UsbDevice, timeout: Duration) -> VZResult<()> {
+        let (tx, rx) = std_mpsc::channel::<Result<(), String>>();
         let ctx: *mut c_void = Box::into_raw(Box::new(tx)).cast();
         // SAFETY: both handles are valid; ctx ownership transfers to the
         // exactly-once trampoline.
@@ -218,15 +266,19 @@ impl UsbController {
                 self.controller_box,
                 device.device_box,
                 ctx,
-                state_trampoline,
+                usb_detach_trampoline,
             );
         }
 
-        let result = rx.await.map_err(|_| VZError::Internal {
-            code: -1,
-            message: "USB detach cancelled".into(),
-        })?;
-        result.map_err(|msg| VZError::OperationFailed(format!("USB detach failed: {msg}")))
+        match rx.recv_timeout(timeout) {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(msg)) => Err(VZError::OperationFailed(format!(
+                "USB detach failed: {msg}"
+            ))),
+            Err(_) => Err(VZError::Timeout(format!(
+                "USB detach timed out after {timeout:?}"
+            ))),
+        }
     }
 }
 

@@ -192,6 +192,9 @@ impl VmManager {
                     read_only: bd.read_only,
                 })
                 .collect(),
+            // Effective only on the VZ backend when the host supports USB
+            // passthrough (macOS 27+); the VMM skips the controller otherwise.
+            usb: true,
             bridge_nic_mac: Some(bridge_nic_mac_for_vm_id(&entry.info.id)),
             // Backend is set per-machine on the `VmConfig`, read here at start.
             // `VmManager::set_backend` can change it on a stopped VM to switch
