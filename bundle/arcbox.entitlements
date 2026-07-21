@@ -21,6 +21,14 @@
     <key>com.apple.vm.networking</key>
     <true/>
 
+    <!-- Accessory Access: claim host USB accessories for VM passthrough
+         (macOS 27+). Restricted: the provisioning profile must carry the
+         "Claim USB Accessory" capability or signing/launch fails. Omitted
+         from arcbox.dev.entitlements for the same reason as
+         com.apple.vm.networking (ad-hoc CI signatures). -->
+    <key>com.apple.developer.accessory-access.usb</key>
+    <true/>
+
     <!-- Allow unsigned executable memory (for JIT in containers) -->
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>

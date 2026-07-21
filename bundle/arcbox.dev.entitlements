@@ -10,10 +10,11 @@
     link system libraries only and keep validation enabled, so they use
     bundle/arcbox.entitlements.
 
-    com.apple.vm.networking is intentionally omitted: this file is also used
-    by the CI smoke test, which ad-hoc signs the daemon (`codesign -s -`).
-    That restricted entitlement requires an Apple provisioning profile, so an
-    ad-hoc signature claiming it is killed by AMFI on launch.
+    com.apple.vm.networking and com.apple.developer.accessory-access.usb are
+    intentionally omitted: this file is also used by the CI smoke test, which
+    ad-hoc signs the daemon (`codesign -s -`). Those restricted entitlements
+    require an Apple provisioning profile, so an ad-hoc signature claiming
+    them is killed by AMFI on launch.
 
     Keep the shared keys below in sync with bundle/arcbox.entitlements.
 -->
