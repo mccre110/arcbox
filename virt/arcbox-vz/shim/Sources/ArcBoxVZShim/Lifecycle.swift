@@ -49,6 +49,7 @@ enum ABXDeviceKind: UInt32 {
     case directorySharing = 5
     case memoryBalloon = 6
     case graphics = 7
+    case usbController = 8
 }
 
 /// Applies one device array onto the configuration, borrowing every handle
@@ -94,6 +95,15 @@ func configSetDevices(
         }
     case .graphics:
         cfg.graphicsDevices = handles.map { abxBorrow($0, as: VZGraphicsDeviceConfiguration.self) }
+    case .usbController:
+        // The Rust side only produces USB controller configs when
+        // usbSupported() (macOS 27+, USB-capable SDK) — see Usb.swift.
+        guard #available(macOS 15.0, *) else {
+            fatalError("configSetDevices: USB controllers require macOS 15+")
+        }
+        cfg.usbControllers = handles.map {
+            abxBorrow($0, as: VZUSBControllerConfiguration.self)
+        }
     }
 }
 
@@ -265,7 +275,7 @@ func balloonSetTarget(_ box: UnsafeMutableRawPointer, _ bytes: UInt64) {
 
 extension Array {
     /// Bounds-checked subscript: nil instead of a trap on out-of-range.
-    fileprivate subscript(safe index: Int) -> Element? {
+    subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
     }
 }

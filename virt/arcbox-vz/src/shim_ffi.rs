@@ -34,6 +34,24 @@ pub type StateCb = unsafe extern "C" fn(ctx: *mut c_void, err: *mut c_char);
 /// (owned by the receiver) or a strdup'd error message.
 pub type ObjectCb = unsafe extern "C" fn(ctx: *mut c_void, handle: *mut c_void, err: *mut c_char);
 
+/// USB accessory event callback — RECURRING, unlike the exactly-once
+/// completion callbacks: fires once per connect/disconnect event for the
+/// lifetime of the listener registration (the registration is
+/// process-lifetime, so `ctx` is never freed). On connect, `accessory` is a
+/// +1 handle owned by the receiver; on disconnect it is null and
+/// `registry_id` identifies the accessory. `name` and `serial` are strdup'd
+/// (nullable) and freed by the receiver.
+pub type UsbEventCb = unsafe extern "C" fn(
+    ctx: *mut c_void,
+    accessory: *mut c_void,
+    registry_id: u64,
+    vendor_id: u16,
+    product_id: u16,
+    name: *mut c_char,
+    serial: *mut c_char,
+    connected: bool,
+);
+
 unsafe extern "C" {
     // Errors / strings / handles
     pub fn abx_string_free(ptr: *mut c_char);
@@ -163,6 +181,30 @@ unsafe extern "C" {
     pub fn abx_installer_new(vm_box: *mut c_void, ipsw_path: *const c_char) -> *mut c_void;
     pub fn abx_installer_fraction(installer_box: *mut c_void) -> f64;
     pub fn abx_installer_install(installer_box: *mut c_void, ctx: *mut c_void, cb: StateCb);
+
+    // USB passthrough (macOS 27+ Accessory Access)
+    pub fn abx_usb_supported() -> bool;
+    pub fn abx_usb_xhci_config_new(error_out: *mut *mut c_char) -> *mut c_void;
+    pub fn abx_usb_manager_register(
+        event_ctx: *mut c_void,
+        event_cb: UsbEventCb,
+        completion_ctx: *mut c_void,
+        completion_cb: StateCb,
+    );
+    pub fn abx_vm_usb_controller_count(vm_box: *mut c_void) -> u64;
+    pub fn abx_vm_usb_controller_at(vm_box: *mut c_void, index: u64) -> *mut c_void;
+    pub fn abx_usb_controller_attach(
+        controller_box: *mut c_void,
+        accessory: *mut c_void,
+        ctx: *mut c_void,
+        cb: ObjectCb,
+    );
+    pub fn abx_usb_controller_detach(
+        controller_box: *mut c_void,
+        device_box: *mut c_void,
+        ctx: *mut c_void,
+        cb: StateCb,
+    );
 }
 
 /// Takes ownership of a shim-returned string, or `None` if null.
@@ -281,11 +323,18 @@ mod tests {
         abx_installer_new as *const (),
         abx_installer_fraction as *const (),
         abx_installer_install as *const (),
+        abx_usb_supported as *const (),
+        abx_usb_xhci_config_new as *const (),
+        abx_usb_manager_register as *const (),
+        abx_vm_usb_controller_count as *const (),
+        abx_vm_usb_controller_at as *const (),
+        abx_usb_controller_attach as *const (),
+        abx_usb_controller_detach as *const (),
     ];
 
     /// Update when symbols are added; a mismatch means Exports.swift and this
     /// file have drifted.
-    const EXPECTED_SYMBOL_COUNT: usize = 71;
+    const EXPECTED_SYMBOL_COUNT: usize = 78;
 
     #[test]
     fn link_coverage() {

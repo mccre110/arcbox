@@ -56,6 +56,7 @@ pub mod configuration;
 pub mod device;
 pub mod restore;
 pub mod socket;
+pub mod usb;
 pub mod vm;
 
 // Re-exports for convenience
@@ -71,10 +72,15 @@ pub use device::{
     MacGraphicsDeviceConfiguration, MemoryBalloonDevice, MemoryBalloonDeviceConfiguration,
     NetworkDeviceConfiguration, RosettaAvailability, SerialPortConfiguration, SharedDirectory,
     SingleDirectoryShare, SocketDeviceConfiguration, StorageDeviceConfiguration,
-    VirtioFileSystemDeviceConfiguration, desired_network_mtu,
+    UsbControllerConfiguration, VirtioFileSystemDeviceConfiguration, desired_network_mtu,
 };
 
 pub use socket::{VirtioSocketConnection, VirtioSocketDevice};
+
+pub use usb::{
+    UsbAccessory, UsbAccessoryEvent, UsbAccessoryInfo, UsbController, UsbDevice,
+    register_accessory_listener,
+};
 
 pub use restore::{MacOSConfigurationRequirements, MacOSInstaller, MacOSRestoreImage};
 
@@ -116,4 +122,14 @@ pub fn min_memory_size() -> u64 {
 pub fn max_memory_size() -> u64 {
     // SAFETY: shim reads a class property; no preconditions.
     unsafe { shim_ffi::abx_vz_max_memory_size() }
+}
+
+/// Check if USB passthrough is supported.
+///
+/// Requires macOS 27+ (Accessory Access framework) and a binary built
+/// against the macOS 27 SDK.
+#[must_use]
+pub fn usb_passthrough_supported() -> bool {
+    // SAFETY: shim evaluates compile-time and #available checks only.
+    unsafe { shim_ffi::abx_usb_supported() }
 }

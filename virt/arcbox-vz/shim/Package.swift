@@ -15,8 +15,12 @@ let package = Package(
                 .swiftLanguageMode(.v5)
             ],
             linkerSettings: [
-                // Recorded as autolink metadata; the authoritative link arg is
-                // emitted by arcbox-vz's build.rs (explicit -framework).
+                // Recorded as autolink metadata; the authoritative link args
+                // are emitted by arcbox-vz's build.rs (explicit -framework).
+                // AccessoryAccess (macOS 27 USB passthrough) is not listed:
+                // its autolink hint comes from Usb.swift's conditional
+                // `import AccessoryAccess`, and build.rs links it only when
+                // the SDK supports it.
                 .linkedFramework("Virtualization")
             ]
         )
