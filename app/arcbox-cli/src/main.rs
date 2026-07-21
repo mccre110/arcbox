@@ -74,6 +74,7 @@ fn main() -> Result<()> {
                 Commands::Docker(cmd) => commands::docker::execute(cmd, cli.format).await,
                 Commands::Kubernetes(cmd) => commands::kubernetes::execute(cmd).await,
                 Commands::System(cmd) => commands::system::execute(cmd).await,
+                Commands::Usb(cmd) => commands::usb::execute(cmd).await,
                 Commands::Boot(cmd) => commands::boot::execute(cmd, cli.format).await,
                 Commands::Disk(cmd) => commands::disk::execute(cmd).await,
                 #[cfg(target_os = "macos")]

@@ -50,7 +50,8 @@ fn label(backend: SystemVmBackend) -> &'static str {
     }
 }
 
-async fn system_client() -> Result<SystemServiceClient<Channel>> {
+/// Connects to the daemon's `SystemService` (shared with the usb module).
+pub(crate) async fn system_client() -> Result<SystemServiceClient<Channel>> {
     let socket_path = super::resolve_grpc_socket_path();
     let channel = Endpoint::from_static("http://[::]:50051")
         .connect_with_connector(UnixConnector::new(socket_path.clone()))
