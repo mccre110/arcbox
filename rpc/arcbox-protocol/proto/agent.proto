@@ -469,3 +469,24 @@ message ImageFsPathsResponse {
     // Read-only layer directories, top-most first.
     repeated string lower_dirs = 1;
 }
+
+// List USB devices as enumerated inside the guest (from sysfs), so the
+// host can report each passed-through accessory's guest device node.
+message ListGuestUsbDevicesRequest {}
+
+// One USB device visible inside the guest.
+message GuestUsbDevice {
+    // USB vendor ID (idVendor).
+    uint32 vendor_id = 1;
+    // USB product ID (idProduct).
+    uint32 product_id = 2;
+    // Serial number, when the device reports one.
+    string serial = 3;
+    // Guest device node, e.g. /dev/bus/usb/001/002.
+    string dev_path = 4;
+}
+
+// Response to `ListGuestUsbDevicesRequest`.
+message ListGuestUsbDevicesResponse {
+    repeated GuestUsbDevice devices = 1;
+}

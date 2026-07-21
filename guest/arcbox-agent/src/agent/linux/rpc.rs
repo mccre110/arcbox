@@ -147,6 +147,9 @@ async fn handle_request(request: RpcRequest) -> RequestResult {
             RequestResult::Single(handle_container_fs_paths(req).await)
         }
         RpcRequest::ImageFsPaths(req) => RequestResult::Single(handle_image_fs_paths(req).await),
+        RpcRequest::ListGuestUsbDevices(_) => {
+            RequestResult::Single(handle_list_guest_usb_devices())
+        }
         RpcRequest::KillAgent => RequestResult::Single(handle_kill_agent()),
         RpcRequest::WatchReadiness(_) => unreachable!("watch readiness is streaming"),
         RpcRequest::WatchMemoryPressure(_) => {
@@ -381,6 +384,16 @@ async fn handle_image_fs_paths(req: arcbox_protocol::agent::ImageFsPathsRequest)
             format!("image fs paths: {e}"),
         )),
     }
+}
+
+/// Handles a `ListGuestUsbDevices` request.
+///
+/// Lists USB devices visible in the guest from sysfs so the host can map
+/// passed-through accessories to their `/dev/bus/usb/BBB/DDD` nodes.
+fn handle_list_guest_usb_devices() -> RpcResponse {
+    RpcResponse::GuestUsbDevices(arcbox_protocol::agent::ListGuestUsbDevicesResponse {
+        devices: super::usb::list_guest_usb_devices(),
+    })
 }
 
 /// Sets CLOCK_REALTIME from the given timestamp (seconds since UNIX epoch).

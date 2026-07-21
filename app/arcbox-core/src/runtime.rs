@@ -616,6 +616,51 @@ impl Runtime {
         }
     }
 
+    /// Lists USB accessories granted to the daemon, with guest device
+    /// nodes filled in for attached devices when the guest listing is
+    /// reachable (best effort — an unreachable agent leaves the paths
+    /// empty rather than failing the listing).
+    pub async fn list_usb_devices(&self) -> Vec<crate::usb::UsbDeviceSnapshot> {
+        let mut snapshots = self.usb_manager.list();
+        if !snapshots.iter().any(|s| s.attached) {
+            return snapshots;
+        }
+
+        // Attached implies a running System VM on VZ, whose agent transport
+        // is async; `connect_agent` itself is a blocking hypervisor call.
+        let machine_manager = Arc::clone(&self.machine_manager);
+        let agent = tokio::task::spawn_blocking(move || {
+            machine_manager.connect_agent(DEFAULT_MACHINE_NAME)
+        })
+        .await;
+        let response = match agent {
+            Ok(Ok(mut agent)) => agent.list_guest_usb_devices().await,
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(CoreError::Vm(format!("agent connect task panicked: {e}"))),
+        };
+        match response {
+            Ok(response) => {
+                let guest_devices: Vec<crate::usb::GuestUsbDevice> = response
+                    .devices
+                    .into_iter()
+                    .filter_map(|dev| {
+                        Some(crate::usb::GuestUsbDevice {
+                            vendor_id: u16::try_from(dev.vendor_id).ok()?,
+                            product_id: u16::try_from(dev.product_id).ok()?,
+                            serial: (!dev.serial.is_empty()).then_some(dev.serial),
+                            dev_path: dev.dev_path,
+                        })
+                    })
+                    .collect();
+                crate::usb::annotate_guest_paths(&mut snapshots, &guest_devices);
+            }
+            Err(e) => {
+                tracing::debug!("guest USB listing unavailable; guest paths omitted: {e}");
+            }
+        }
+        snapshots
+    }
+
     /// Starts the native Kubernetes cluster in the default VM.
     ///
     /// # Errors

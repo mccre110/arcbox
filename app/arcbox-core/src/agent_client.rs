@@ -14,10 +14,11 @@ use arcbox_protocol::agent::{
     ImageFsPathsRequest, ImageFsPathsResponse, KubernetesDeleteRequest, KubernetesDeleteResponse,
     KubernetesKubeconfigRequest, KubernetesKubeconfigResponse, KubernetesStartRequest,
     KubernetesStartResponse, KubernetesStatusRequest, KubernetesStatusResponse,
-    KubernetesStopRequest, KubernetesStopResponse, MachineStats, MemoryPressureEvent,
-    MmapReadFileRequest, MmapReadFileResponse, PingRequest, PingResponse, ReadinessEvent,
-    RuntimeEnsureRequest, RuntimeEnsureResponse, RuntimeStatusRequest, RuntimeStatusResponse,
-    SystemInfo, WatchMemoryPressureRequest, WatchReadinessRequest, WatchStatsRequest,
+    KubernetesStopRequest, KubernetesStopResponse, ListGuestUsbDevicesRequest,
+    ListGuestUsbDevicesResponse, MachineStats, MemoryPressureEvent, MmapReadFileRequest,
+    MmapReadFileResponse, PingRequest, PingResponse, ReadinessEvent, RuntimeEnsureRequest,
+    RuntimeEnsureResponse, RuntimeStatusRequest, RuntimeStatusResponse, SystemInfo,
+    WatchMemoryPressureRequest, WatchReadinessRequest, WatchStatsRequest,
 };
 use arcbox_protocol::sandbox_v1::{
     CheckpointRequest, CheckpointResponse, CreateSandboxRequest, CreateSandboxResponse,
@@ -939,6 +940,24 @@ impl AgentClient {
             &payload,
             MessageType::ImageFsPathsResponse,
         )
+    }
+
+    /// Lists USB devices visible inside the guest (from sysfs), so
+    /// passed-through accessories can be mapped to their guest device
+    /// nodes. Async transports only (VZ/Linux vsock) — USB passthrough is
+    /// VZ-only, so no blocking (HV) variant exists.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails.
+    pub async fn list_guest_usb_devices(&mut self) -> Result<ListGuestUsbDevicesResponse> {
+        let payload = ListGuestUsbDevicesRequest {}.encode_to_vec();
+        self.unary_rpc(
+            MessageType::ListGuestUsbDevicesRequest,
+            &payload,
+            MessageType::ListGuestUsbDevicesResponse,
+        )
+        .await
     }
 
     /// Triggers an immediate fstrim on guest data mount points.

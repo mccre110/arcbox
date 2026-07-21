@@ -3452,6 +3452,38 @@ pub struct ImageFsPathsResponse {
     #[prost(string, repeated, tag = "1")]
     pub lower_dirs: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
+/// List USB devices as enumerated inside the guest (from sysfs), so the
+/// host can report each passed-through accessory's guest device node.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListGuestUsbDevicesRequest {}
+/// One USB device visible inside the guest.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GuestUsbDevice {
+    /// USB vendor ID (idVendor).
+    #[prost(uint32, tag = "1")]
+    pub vendor_id: u32,
+    /// USB product ID (idProduct).
+    #[prost(uint32, tag = "2")]
+    pub product_id: u32,
+    /// Serial number, when the device reports one.
+    #[prost(string, tag = "3")]
+    pub serial: ::prost::alloc::string::String,
+    /// Guest device node, e.g. /dev/bus/usb/001/002.
+    #[prost(string, tag = "4")]
+    pub dev_path: ::prost::alloc::string::String,
+}
+/// Response to `ListGuestUsbDevicesRequest`.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListGuestUsbDevicesResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub devices: ::prost::alloc::vec::Vec<GuestUsbDevice>,
+}
 /// Subscription request for machine stats.
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

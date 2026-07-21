@@ -377,8 +377,8 @@ impl SystemService for SystemServiceImpl {
     ) -> Result<Response<ListUsbDevicesResponse>, Status> {
         let runtime = self.runtime.ready()?;
         let devices = runtime
-            .usb_manager()
-            .list()
+            .list_usb_devices()
+            .await
             .into_iter()
             .map(usb_device_to_proto)
             .collect();
