@@ -134,10 +134,12 @@ pub mod api {
 
     // System service types
     pub use super::v1::{
-        Event, EventActor, EventsRequest, GetInfoRequest, GetInfoResponse, GetVersionRequest,
-        GetVersionResponse, PruneRequest, PruneResponse, ResolveContainerFsRequest,
-        ResolveContainerFsResponse, ResolveImageFsRequest, ResolveImageFsResponse,
-        SystemPingRequest, SystemPingResponse,
+        AttachUsbDeviceRequest, AttachUsbDeviceResponse, DetachUsbDeviceRequest,
+        DetachUsbDeviceResponse, Event, EventActor, EventsRequest, GetInfoRequest, GetInfoResponse,
+        GetVersionRequest, GetVersionResponse, ListUsbDevicesRequest, ListUsbDevicesResponse,
+        PruneRequest, PruneResponse, ResolveContainerFsRequest, ResolveContainerFsResponse,
+        ResolveImageFsRequest, ResolveImageFsResponse, SystemPingRequest, SystemPingResponse,
+        UsbDevice, UsbDeviceSelector,
     };
 
     // Volume service types
@@ -206,10 +208,12 @@ pub use v1::{
 
 // API types - System
 pub use v1::{
-    Event, EventActor, EventsRequest, GetInfoRequest, GetInfoResponse, GetVersionRequest,
-    GetVersionResponse, PruneRequest, PruneResponse, ResolveContainerFsRequest,
-    ResolveContainerFsResponse, ResolveImageFsRequest, ResolveImageFsResponse, SystemPingRequest,
-    SystemPingResponse,
+    AttachUsbDeviceRequest, AttachUsbDeviceResponse, DetachUsbDeviceRequest,
+    DetachUsbDeviceResponse, Event, EventActor, EventsRequest, GetInfoRequest, GetInfoResponse,
+    GetVersionRequest, GetVersionResponse, ListUsbDevicesRequest, ListUsbDevicesResponse,
+    PruneRequest, PruneResponse, ResolveContainerFsRequest, ResolveContainerFsResponse,
+    ResolveImageFsRequest, ResolveImageFsResponse, SystemPingRequest, SystemPingResponse,
+    UsbDevice, UsbDeviceSelector,
 };
 
 // API types - Volume

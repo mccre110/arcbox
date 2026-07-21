@@ -20,6 +20,8 @@ use crate::event::Event;
 use crate::vm_lifecycle::DEFAULT_MACHINE_NAME;
 #[cfg(target_os = "macos")]
 use std::sync::Mutex;
+#[cfg(target_os = "macos")]
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(target_os = "macos")]
 type Registry =
@@ -35,6 +37,12 @@ pub struct UsbManager {
     machine_manager: Arc<MachineManager>,
     #[cfg(target_os = "macos")]
     registry: Arc<Mutex<Registry>>,
+    /// Whether the accessory listener registered successfully. False on
+    /// macOS < 27, without the macOS 27 SDK, or when registration was
+    /// rejected (e.g. missing entitlement) — attach/detach then fail with
+    /// a clear precondition error instead of a puzzling "not found".
+    #[cfg(target_os = "macos")]
+    supported: AtomicBool,
 }
 
 #[cfg(target_os = "macos")]
@@ -46,6 +54,7 @@ impl UsbManager {
         Self {
             machine_manager,
             registry: Arc::new(Mutex::new(Registry::new())),
+            supported: AtomicBool::new(false),
         }
     }
 
@@ -73,6 +82,7 @@ impl UsbManager {
                 return;
             }
         };
+        self.supported.store(true, Ordering::Relaxed);
         tracing::info!("USB accessory listener registered");
 
         let registry = Arc::clone(&self.registry);
@@ -153,6 +163,7 @@ impl UsbManager {
     /// is not running on the VZ backend, or the framework rejects the
     /// attach.
     pub async fn attach(&self, selector: &UsbSelector) -> Result<()> {
+        self.ensure_supported()?;
         let (registry_id, accessory) = self
             .registry
             .lock()
@@ -190,6 +201,7 @@ impl UsbManager {
     /// is not attached, or the framework rejects the detach (the entry then
     /// stays attached).
     pub async fn detach(&self, selector: &UsbSelector) -> Result<()> {
+        self.ensure_supported()?;
         let (registry_id, device) = self
             .registry
             .lock()
@@ -210,6 +222,18 @@ impl UsbManager {
             .map_err(|_| CoreError::LockPoisoned)?
             .complete_detach(registry_id);
         Ok(())
+    }
+
+    /// Rejects attach/detach with a clear precondition error when the
+    /// accessory listener never registered.
+    fn ensure_supported(&self) -> Result<()> {
+        if self.supported.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+        Err(CoreError::invalid_state(
+            "USB passthrough requires macOS 27 or later with Accessory Access (and the USB \
+             accessory entitlement); the accessory listener is not registered",
+        ))
     }
 }
 

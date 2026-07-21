@@ -218,6 +218,20 @@ service SystemService {
     // (computed from the image config's diff_ids). Same read path as
     // ResolveContainerFs.
     rpc ResolveImageFs(ResolveImageFsRequest) returns (ResolveImageFsResponse);
+
+    // Lists host USB accessories granted to the daemon via the macOS
+    // Accessory Access UI, with their System VM attachment state.
+    // Empty when USB passthrough is unsupported (non-macOS, macOS < 27).
+    rpc ListUsbDevices(ListUsbDevicesRequest) returns (ListUsbDevicesResponse);
+
+    // Hot-plugs a granted USB accessory into the running System VM.
+    // Requires macOS 27+ and the VZ backend (FAILED_PRECONDITION
+    // otherwise). Attachments are runtime-only — a System VM restart
+    // detaches everything.
+    rpc AttachUsbDevice(AttachUsbDeviceRequest) returns (AttachUsbDeviceResponse);
+
+    // Detaches a previously attached USB accessory from the System VM.
+    rpc DetachUsbDevice(DetachUsbDeviceRequest) returns (DetachUsbDeviceResponse);
 }
 
 // Hypervisor backend for the single System VM.
@@ -267,6 +281,58 @@ message ResolveImageFsResponse {
     // Read-only layer directories, top-most first.
     repeated string lower_dirs = 1;
 }
+
+// Request to list granted USB accessories.
+message ListUsbDevicesRequest {}
+
+// Granted USB accessories and their attachment state.
+message ListUsbDevicesResponse {
+    repeated UsbDevice devices = 1;
+}
+
+// One host USB accessory granted to the daemon.
+message UsbDevice {
+    // USB vendor ID (idVendor).
+    uint32 vendor_id = 1;
+    // USB product ID (idProduct).
+    uint32 product_id = 2;
+    // Product name from the host, when reported.
+    string name = 3;
+    // Serial number, when the device reports one.
+    string serial = 4;
+    // Whether the accessory is attached to the System VM.
+    bool attached = 5;
+    // Guest device node (/dev/bus/usb/BBB/DDD) when attached and the
+    // guest listing matched it; empty otherwise.
+    string guest_path = 6;
+}
+
+// Selects a USB device by vendor/product ID plus an optional serial to
+// disambiguate identical devices.
+message UsbDeviceSelector {
+    // USB vendor ID (idVendor).
+    uint32 vendor_id = 1;
+    // USB product ID (idProduct).
+    uint32 product_id = 2;
+    // Serial number; empty matches any.
+    string serial = 3;
+}
+
+// Request to attach a granted accessory to the System VM.
+message AttachUsbDeviceRequest {
+    UsbDeviceSelector selector = 1;
+}
+
+// Result of an attach; empty on success.
+message AttachUsbDeviceResponse {}
+
+// Request to detach an attached accessory from the System VM.
+message DetachUsbDeviceRequest {
+    UsbDeviceSelector selector = 1;
+}
+
+// Result of a detach; empty on success.
+message DetachUsbDeviceResponse {}
 
 // Diagnostic snapshot of the System VM's virtio devices and vCPUs.
 message VirtioDebugInfo {

@@ -738,8 +738,9 @@ impl Vmm {
             )));
         }
         if self.config.backend != VmBackend::Vz {
-            return Err(VmmError::Device(
-                "USB passthrough is not supported on the HV backend".to_string(),
+            // invalid_state so the API layer maps it to FAILED_PRECONDITION.
+            return Err(VmmError::invalid_state(
+                "USB passthrough is not supported on the HV backend; switch the System VM to VZ",
             ));
         }
         self.darwin_vm

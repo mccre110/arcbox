@@ -344,6 +344,86 @@ pub struct ResolveImageFsResponse {
     #[prost(string, repeated, tag = "1")]
     pub lower_dirs: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
+/// Request to list granted USB accessories.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListUsbDevicesRequest {}
+/// Granted USB accessories and their attachment state.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListUsbDevicesResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub devices: ::prost::alloc::vec::Vec<UsbDevice>,
+}
+/// One host USB accessory granted to the daemon.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UsbDevice {
+    /// USB vendor ID (idVendor).
+    #[prost(uint32, tag = "1")]
+    pub vendor_id: u32,
+    /// USB product ID (idProduct).
+    #[prost(uint32, tag = "2")]
+    pub product_id: u32,
+    /// Product name from the host, when reported.
+    #[prost(string, tag = "3")]
+    pub name: ::prost::alloc::string::String,
+    /// Serial number, when the device reports one.
+    #[prost(string, tag = "4")]
+    pub serial: ::prost::alloc::string::String,
+    /// Whether the accessory is attached to the System VM.
+    #[prost(bool, tag = "5")]
+    pub attached: bool,
+    /// Guest device node (/dev/bus/usb/BBB/DDD) when attached and the
+    /// guest listing matched it; empty otherwise.
+    #[prost(string, tag = "6")]
+    pub guest_path: ::prost::alloc::string::String,
+}
+/// Selects a USB device by vendor/product ID plus an optional serial to
+/// disambiguate identical devices.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UsbDeviceSelector {
+    /// USB vendor ID (idVendor).
+    #[prost(uint32, tag = "1")]
+    pub vendor_id: u32,
+    /// USB product ID (idProduct).
+    #[prost(uint32, tag = "2")]
+    pub product_id: u32,
+    /// Serial number; empty matches any.
+    #[prost(string, tag = "3")]
+    pub serial: ::prost::alloc::string::String,
+}
+/// Request to attach a granted accessory to the System VM.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AttachUsbDeviceRequest {
+    #[prost(message, optional, tag = "1")]
+    pub selector: ::core::option::Option<UsbDeviceSelector>,
+}
+/// Result of an attach; empty on success.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AttachUsbDeviceResponse {}
+/// Request to detach an attached accessory from the System VM.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DetachUsbDeviceRequest {
+    #[prost(message, optional, tag = "1")]
+    pub selector: ::core::option::Option<UsbDeviceSelector>,
+}
+/// Result of a detach; empty on success.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DetachUsbDeviceResponse {}
 /// Diagnostic snapshot of the System VM's virtio devices and vCPUs.
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
