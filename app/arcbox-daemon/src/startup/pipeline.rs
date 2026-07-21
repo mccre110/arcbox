@@ -10,6 +10,7 @@ use std::time::Instant;
 use anyhow::Result;
 use arcbox_api::SetupPhase;
 use arcbox_core::Runtime;
+#[cfg(target_os = "macos")]
 use macos_resolver::FileResolver;
 use tracing::{info, warn};
 
@@ -201,12 +202,17 @@ impl RuntimeServicesStarted {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn check_resolver_installed(domain: &str) {
     let resolver = FileResolver::new("arcbox");
     if !resolver.is_registered(domain) {
         println!("Hint: Run 'sudo arcbox dns install' to enable *.{domain} DNS resolution.");
     }
 }
+
+/// Non-macOS stub: the `/etc/resolver` mechanism is macOS-only.
+#[cfg(not(target_os = "macos"))]
+fn check_resolver_installed(_domain: &str) {}
 
 async fn record_startup_phase<T, F>(phase: &'static str, future: F) -> Result<T>
 where

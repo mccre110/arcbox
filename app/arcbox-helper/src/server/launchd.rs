@@ -5,11 +5,14 @@
 //! file descriptor to the process on start. This avoids the helper
 //! needing to manage socket lifecycle or permissions.
 
+#[cfg(target_os = "macos")]
 use std::os::unix::io::FromRawFd;
 
 /// The socket name in the launchd plist `Sockets` dictionary.
+#[cfg(target_os = "macos")]
 const LAUNCHD_SOCKET_NAME: &str = "helper";
 
+#[cfg(target_os = "macos")]
 unsafe extern "C" {
     fn launch_activate_socket(
         name: *const libc::c_char,
@@ -18,10 +21,17 @@ unsafe extern "C" {
     ) -> libc::c_int;
 }
 
+/// Non-macOS stub: there is no launchd, so activation never applies.
+#[cfg(not(target_os = "macos"))]
+pub fn listener() -> Option<tokio::net::UnixListener> {
+    None
+}
+
 /// Gets a Unix listener from launchd socket activation.
 ///
 /// Returns `Some` when running under launchd with a `Sockets` config,
 /// `None` when started manually (dev mode).
+#[cfg(target_os = "macos")]
 pub fn listener() -> Option<tokio::net::UnixListener> {
     let name = std::ffi::CString::new(LAUNCHD_SOCKET_NAME).ok()?;
     let mut fds_ptr: *mut libc::c_int = std::ptr::null_mut();

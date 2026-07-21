@@ -96,8 +96,8 @@ impl AgentClient {
     /// For the HV backend's AF_UNIX socketpair: the blocking path avoids the
     /// tokio/kqueue reactor stall on rapid connect/teardown cycles. Callers
     /// must route streaming RPCs elsewhere — the blocking transport rejects
-    /// them.
-    #[cfg(target_os = "macos")]
+    /// them. (Plain Unix socket I/O, so available on every Unix platform
+    /// even though only the macOS HV backend produces such fds.)
     pub fn from_fd_blocking(cid: u32, fd: std::os::unix::io::RawFd) -> Result<Self> {
         let transport = unsafe { BlockingVsockTransport::from_raw_fd(fd) }
             .map_err(|e| CoreError::Machine(format!("invalid vsock fd: {e}")))?;
