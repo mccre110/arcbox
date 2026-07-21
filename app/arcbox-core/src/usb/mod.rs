@@ -10,9 +10,11 @@
 //! available. On other platforms (and on macOS without Accessory Access)
 //! listing returns empty and attach/detach fail with a clear error.
 
+mod manager;
 mod registry;
 mod selector;
 
+pub use manager::UsbManager;
 pub use selector::UsbSelector;
 
 /// Identity of a host USB accessory granted to the daemon.

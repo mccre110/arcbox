@@ -954,6 +954,52 @@ impl MachineManager {
         self.vm_manager.debug_snapshot(&machine.vm_id)
     }
 
+    /// Attaches a granted USB accessory to a machine's running VM
+    /// (hot-plug, VZ backend only). Blocks up to the framework completion
+    /// timeout — call from a blocking context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the machine is not found, its VM is not running
+    /// on the VZ backend, or the framework rejects the attach.
+    #[cfg(target_os = "macos")]
+    pub fn attach_usb(
+        &self,
+        name: &str,
+        accessory: &arcbox_hypervisor::darwin::UsbAccessory,
+    ) -> Result<arcbox_hypervisor::darwin::UsbDevice> {
+        let vm_id = self.vm_id_for(name)?;
+        self.vm_manager.attach_usb(&vm_id, accessory)
+    }
+
+    /// Detaches a previously attached USB device from a machine's running
+    /// VM (VZ backend only). Blocks up to the framework completion timeout
+    /// — call from a blocking context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the machine is not found, its VM is not running
+    /// on the VZ backend, or the framework rejects the detach.
+    #[cfg(target_os = "macos")]
+    pub fn detach_usb(
+        &self,
+        name: &str,
+        device: &arcbox_hypervisor::darwin::UsbDevice,
+    ) -> Result<()> {
+        let vm_id = self.vm_id_for(name)?;
+        self.vm_manager.detach_usb(&vm_id, device)
+    }
+
+    /// Resolves a machine name to its underlying VM ID.
+    #[cfg(target_os = "macos")]
+    fn vm_id_for(&self, name: &str) -> Result<VmId> {
+        let machines = self.machines.read().map_err(|_| CoreError::LockPoisoned)?;
+        machines
+            .get(name)
+            .map(|machine| machine.vm_id.clone())
+            .ok_or_else(|| CoreError::not_found(name.to_string()))
+    }
+
     /// Stops a machine (force).
     ///
     /// Accepts `Stopping` as well as `Running` so a force stop can preempt
