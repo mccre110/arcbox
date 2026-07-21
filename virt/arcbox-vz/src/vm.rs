@@ -3,6 +3,7 @@
 use crate::device::MemoryBalloonDevice;
 use crate::error::{VZError, VZResult};
 use crate::socket::VirtioSocketDevice;
+use crate::usb::UsbController;
 use std::ffi::c_void;
 use tokio::sync::oneshot;
 
@@ -305,6 +306,33 @@ impl VirtualMachine {
     #[must_use]
     pub fn first_balloon_device(&self) -> Option<MemoryBalloonDevice> {
         self.memory_balloon_devices().into_iter().next()
+    }
+
+    /// Returns the USB controllers configured on this VM.
+    ///
+    /// Empty when the configuration had no USB controller or the host does
+    /// not support USB passthrough (macOS 27+).
+    #[must_use]
+    pub fn usb_controllers(&self) -> Vec<UsbController> {
+        // SAFETY: vm_box is valid; the shim queue-syncs the reads and hands
+        // out +1 ABXUsbControllerBox handles.
+        unsafe {
+            let count = crate::shim_ffi::abx_vm_usb_controller_count(self.vm_box);
+            (0..count)
+                .filter_map(|i| {
+                    let controller_box = crate::shim_ffi::abx_vm_usb_controller_at(self.vm_box, i);
+                    (!controller_box.is_null()).then(|| UsbController::from_box(controller_box))
+                })
+                .collect()
+        }
+    }
+
+    /// Returns the first USB controller, if any.
+    ///
+    /// This is a convenience method for VMs with a single USB controller.
+    #[must_use]
+    pub fn first_usb_controller(&self) -> Option<UsbController> {
+        self.usb_controllers().into_iter().next()
     }
 }
 

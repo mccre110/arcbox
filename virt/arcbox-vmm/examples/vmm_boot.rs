@@ -48,6 +48,7 @@ fn main() {
         guest_cid: None,
         balloon: false,
         block_devices: Vec::new(),
+        usb: false,
         bridge_nic_mac: None,
         backend: arcbox_vmm::VmBackend::default(),
         debug_console_socket: None,

@@ -3,7 +3,7 @@
 use crate::device::{
     EntropyDeviceConfiguration, MacGraphicsDeviceConfiguration, MemoryBalloonDeviceConfiguration,
     NetworkDeviceConfiguration, SerialPortConfiguration, SocketDeviceConfiguration,
-    StorageDeviceConfiguration, VirtioFileSystemDeviceConfiguration,
+    StorageDeviceConfiguration, UsbControllerConfiguration, VirtioFileSystemDeviceConfiguration,
 };
 use crate::error::{VZError, VZResult};
 use crate::vm::VirtualMachine;
@@ -26,6 +26,7 @@ pub struct VirtualMachineConfiguration {
     directory_sharing_devices: Vec<*mut c_void>,
     memory_balloon_devices: Vec<*mut c_void>,
     graphics_devices: Vec<*mut c_void>,
+    usb_controllers: Vec<*mut c_void>,
 }
 
 // SAFETY: The inner pointer is an ObjC object handle created by the shim;
@@ -48,6 +49,7 @@ impl VirtualMachineConfiguration {
             directory_sharing_devices: Vec::new(),
             memory_balloon_devices: Vec::new(),
             graphics_devices: Vec::new(),
+            usb_controllers: Vec::new(),
         })
     }
 
@@ -180,6 +182,15 @@ impl VirtualMachineConfiguration {
         self
     }
 
+    /// Adds a USB (XHCI) controller to the VM.
+    ///
+    /// Required before USB devices can be hot-plugged at runtime
+    /// (macOS 27+, see [`crate::usb`]).
+    pub fn add_usb_controller(&mut self, controller: UsbControllerConfiguration) -> &mut Self {
+        self.usb_controllers.push(controller.into_ptr());
+        self
+    }
+
     /// Validates the configuration.
     ///
     /// This is called automatically by `build()`, but can be called
@@ -221,7 +232,7 @@ impl VirtualMachineConfiguration {
     /// the +1s stays in the vectors, released by Drop.
     fn apply_devices(&mut self) {
         // Kind values mirror the shim's ABXDeviceKind.
-        let arrays: [(u32, &Vec<*mut c_void>); 8] = [
+        let arrays: [(u32, &Vec<*mut c_void>); 9] = [
             (0, &self.storage_devices),
             (1, &self.network_devices),
             (2, &self.serial_ports),
@@ -230,6 +241,7 @@ impl VirtualMachineConfiguration {
             (5, &self.directory_sharing_devices),
             (6, &self.memory_balloon_devices),
             (7, &self.graphics_devices),
+            (8, &self.usb_controllers),
         ];
         for (kind, handles) in arrays {
             if !handles.is_empty() {
@@ -262,6 +274,7 @@ impl Drop for VirtualMachineConfiguration {
             &self.directory_sharing_devices,
             &self.memory_balloon_devices,
             &self.graphics_devices,
+            &self.usb_controllers,
         ] {
             for &handle in handles {
                 if !handle.is_null() {

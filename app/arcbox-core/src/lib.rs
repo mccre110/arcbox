@@ -48,11 +48,12 @@ pub mod route_reconciler;
 pub mod runtime;
 pub mod stats_hub;
 pub mod trace;
+pub mod usb;
 pub mod vm;
 pub mod vm_lifecycle;
 
 pub use agent_client::{AgentClient, ExecSessionInput, WriteFileChunk};
-pub use arcbox_vmm::{DeviceDebug, QueueDebug, VmBackend};
+pub use arcbox_vmm::{DeviceDebug, QueueDebug, VmBackend, VmmError};
 pub use boot_assets::{
     BootAssetConfig, BootAssetManifest, BootAssetProvider, BootAssets, DownloadProgress,
     PreparePhase, boot_asset_version,
@@ -70,6 +71,7 @@ pub use macos::{
 pub use macos::{PullPhase, PullSource};
 pub use migration::MigrationManager;
 pub use runtime::{Runtime, SandboxPortExposure};
+pub use usb::{GuestUsbDevice, UsbDeviceInfo, UsbDeviceSnapshot, UsbManager, UsbSelector};
 pub use vm::{SharedDirConfig, VmConfig, VmManager};
 pub use vm_lifecycle::{
     ActivityScope, DEFAULT_MACHINE_NAME, DefaultVmConfig, HealthMonitor, VmLifecycleConfig,

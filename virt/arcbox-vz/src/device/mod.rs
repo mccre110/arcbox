@@ -11,6 +11,7 @@ mod network;
 mod serial;
 mod socket;
 mod storage;
+mod usb;
 
 pub use balloon::{MemoryBalloonDevice, MemoryBalloonDeviceConfiguration};
 pub use entropy::EntropyDeviceConfiguration;
@@ -23,3 +24,4 @@ pub use network::{NetworkDeviceConfiguration, desired_network_mtu};
 pub use serial::SerialPortConfiguration;
 pub use socket::SocketDeviceConfiguration;
 pub use storage::StorageDeviceConfiguration;
+pub use usb::UsbControllerConfiguration;

@@ -48,11 +48,21 @@ fn is_process_alive(pid: i32) -> bool {
     std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
 }
 
+#[cfg(target_os = "macos")]
 pub(super) fn is_arcbox_daemon(pid: i32) -> bool {
     match libproc::proc_pid::pidpath(pid) {
         Ok(path) => path.contains("arcbox-daemon") || path.contains("arcboxlabs.desktop.daemon"),
         Err(_) => false,
     }
+}
+
+/// Non-macOS variant: resolve the executable path via procfs.
+#[cfg(not(target_os = "macos"))]
+pub(super) fn is_arcbox_daemon(pid: i32) -> bool {
+    std::fs::read_link(format!("/proc/{pid}/exe")).is_ok_and(|path| {
+        let path = path.to_string_lossy();
+        path.contains("arcbox-daemon") || path.contains("arcboxlabs.desktop.daemon")
+    })
 }
 
 /// Wait for processes holding `docker.img` open to exit on their own.

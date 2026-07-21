@@ -128,6 +128,7 @@ fn run() -> Result<Outcome, Failure> {
             path: rootfs_path,
             read_only: true,
         }],
+        usb: false,
         bridge_nic_mac: None,
         backend: VmBackend::Hv,
         debug_console_socket: None,

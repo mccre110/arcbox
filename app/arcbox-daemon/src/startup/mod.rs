@@ -17,8 +17,16 @@ use anyhow::{Context, Result};
 use arcbox_api::SetupPhase;
 use arcbox_constants::paths::{ArcboxProfile, HostLayout};
 use arcbox_core::{Config, Runtime};
+#[cfg(target_os = "macos")]
 use macos_resolver::to_env_prefix;
 use tracing::{info, warn};
+
+/// Non-macOS mirror of `macos_resolver::to_env_prefix` so the DNS env-var
+/// names stay identical across platforms.
+#[cfg(not(target_os = "macos"))]
+fn to_env_prefix(prefix: &str) -> String {
+    prefix.to_uppercase().replace('-', "_")
+}
 
 use crate::DaemonArgs;
 use crate::context::{DaemonContext, EarlyContext, StartupHandles, VmArgs};

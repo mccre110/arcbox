@@ -490,3 +490,59 @@ public func abxInstallerInstall(
 ) {
     installerInstall(box, ctx, callback)
 }
+
+// MARK: - USB passthrough (macOS 27+ Accessory Access)
+
+@_cdecl("abx_usb_supported")
+public func abxUsbSupported() -> Bool {
+    usbSupported()
+}
+
+@_cdecl("abx_usb_xhci_config_new")
+public func abxUsbXhciConfigNew(
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutableRawPointer? {
+    usbXhciConfigNew(errorOut)
+}
+
+@_cdecl("abx_usb_manager_register")
+public func abxUsbManagerRegister(
+    _ eventCtx: UnsafeMutableRawPointer?,
+    _ eventCallback: @escaping ABXUsbEventCallback,
+    _ completionCtx: UnsafeMutableRawPointer?,
+    _ completion: @escaping ABXStateCallback
+) {
+    usbManagerRegister(eventCtx, eventCallback, completionCtx, completion)
+}
+
+@_cdecl("abx_vm_usb_controller_count")
+public func abxVmUsbControllerCount(_ box: UnsafeMutableRawPointer) -> UInt64 {
+    vmUsbControllerCount(box)
+}
+
+@_cdecl("abx_vm_usb_controller_at")
+public func abxVmUsbControllerAt(
+    _ box: UnsafeMutableRawPointer, _ index: UInt64
+) -> UnsafeMutableRawPointer? {
+    vmUsbControllerAt(box, index)
+}
+
+@_cdecl("abx_usb_controller_attach")
+public func abxUsbControllerAttach(
+    _ box: UnsafeMutableRawPointer,
+    _ accessory: UnsafeMutableRawPointer,
+    _ ctx: UnsafeMutableRawPointer?,
+    _ callback: @escaping ABXObjectCallback
+) {
+    usbControllerAttach(box, accessory, ctx, callback)
+}
+
+@_cdecl("abx_usb_controller_detach")
+public func abxUsbControllerDetach(
+    _ box: UnsafeMutableRawPointer,
+    _ device: UnsafeMutableRawPointer,
+    _ ctx: UnsafeMutableRawPointer?,
+    _ callback: @escaping ABXStateCallback
+) {
+    usbControllerDetach(box, device, ctx, callback)
+}

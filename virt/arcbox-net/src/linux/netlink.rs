@@ -202,13 +202,12 @@ impl NetlinkHandle {
             )));
         }
 
-        // Bind to the netlink socket
-        let addr = libc::sockaddr_nl {
-            nl_family: libc::AF_NETLINK as u16,
-            nl_pad: 0,
-            nl_pid: 0, // Let kernel assign
-            nl_groups: 0,
-        };
+        // Bind to the netlink socket. Zero-initialized: nl_pid 0 lets the
+        // kernel assign, nl_groups 0 joins no multicast groups (libc's
+        // padding field cannot be named in a struct literal).
+        // SAFETY: sockaddr_nl is a plain C struct; all-zeroes is valid.
+        let mut addr: libc::sockaddr_nl = unsafe { mem::zeroed() };
+        addr.nl_family = libc::AF_NETLINK as u16;
 
         let ret = unsafe {
             libc::bind(

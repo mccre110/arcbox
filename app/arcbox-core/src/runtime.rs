@@ -14,6 +14,7 @@ use crate::machine::{MachineManager, MachineState};
 #[cfg(target_os = "macos")]
 use crate::macos::MacMachineManager;
 use crate::migration::MigrationManager;
+use crate::usb::UsbManager;
 use crate::vm::VmManager;
 use crate::vm_lifecycle::{DEFAULT_MACHINE_NAME, VmLifecycleConfig, VmLifecycleManager};
 use arcbox_net::NetworkManager;
@@ -87,6 +88,9 @@ pub struct Runtime {
     network_manager: Arc<NetworkManager>,
     /// Host-side runtime migration manager.
     migration_manager: Arc<MigrationManager>,
+    /// USB accessory manager (Accessory Access grants + System VM
+    /// attachments; inert stub off macOS).
+    usb_manager: Arc<UsbManager>,
     /// macOS guest machine manager (Apple Silicon only).
     #[cfg(target_os = "macos")]
     mac_machine_manager: Arc<MacMachineManager>,
@@ -222,6 +226,8 @@ impl Runtime {
 
         let migration_manager = Arc::new(MigrationManager::new(config.docker.socket_path.clone()));
 
+        let usb_manager = Arc::new(UsbManager::new(Arc::clone(&machine_manager)));
+
         #[cfg(target_os = "macos")]
         let mac_machine_manager = Arc::new(MacMachineManager::new(&config.data_dir));
 
@@ -243,6 +249,7 @@ impl Runtime {
             container_backend: system_backend,
             network_manager,
             migration_manager,
+            usb_manager,
             #[cfg(target_os = "macos")]
             mac_machine_manager,
             machine_image_manager,
@@ -326,6 +333,12 @@ impl Runtime {
     #[must_use]
     pub const fn migration_manager(&self) -> &Arc<MigrationManager> {
         &self.migration_manager
+    }
+
+    /// Returns the USB accessory manager.
+    #[must_use]
+    pub const fn usb_manager(&self) -> &Arc<UsbManager> {
+        &self.usb_manager
     }
 
     /// Returns the macOS guest machine manager (Apple Silicon only).
@@ -603,6 +616,51 @@ impl Runtime {
         }
     }
 
+    /// Lists USB accessories granted to the daemon, with guest device
+    /// nodes filled in for attached devices when the guest listing is
+    /// reachable (best effort — an unreachable agent leaves the paths
+    /// empty rather than failing the listing).
+    pub async fn list_usb_devices(&self) -> Vec<crate::usb::UsbDeviceSnapshot> {
+        let mut snapshots = self.usb_manager.list();
+        if !snapshots.iter().any(|s| s.attached) {
+            return snapshots;
+        }
+
+        // Attached implies a running System VM on VZ, whose agent transport
+        // is async; `connect_agent` itself is a blocking hypervisor call.
+        let machine_manager = Arc::clone(&self.machine_manager);
+        let agent = tokio::task::spawn_blocking(move || {
+            machine_manager.connect_agent(DEFAULT_MACHINE_NAME)
+        })
+        .await;
+        let response = match agent {
+            Ok(Ok(mut agent)) => agent.list_guest_usb_devices().await,
+            Ok(Err(e)) => Err(e),
+            Err(e) => Err(CoreError::Vm(format!("agent connect task panicked: {e}"))),
+        };
+        match response {
+            Ok(response) => {
+                let guest_devices: Vec<crate::usb::GuestUsbDevice> = response
+                    .devices
+                    .into_iter()
+                    .filter_map(|dev| {
+                        Some(crate::usb::GuestUsbDevice {
+                            vendor_id: u16::try_from(dev.vendor_id).ok()?,
+                            product_id: u16::try_from(dev.product_id).ok()?,
+                            serial: (!dev.serial.is_empty()).then_some(dev.serial),
+                            dev_path: dev.dev_path,
+                        })
+                    })
+                    .collect();
+                crate::usb::annotate_guest_paths(&mut snapshots, &guest_devices);
+            }
+            Err(e) => {
+                tracing::debug!("guest USB listing unavailable; guest paths omitted: {e}");
+            }
+        }
+        snapshots
+    }
+
     /// Starts the native Kubernetes cluster in the default VM.
     ///
     /// # Errors
@@ -707,6 +765,11 @@ impl Runtime {
         tokio::fs::create_dir_all(&self.config.data_dir).await?;
         tokio::fs::create_dir_all(self.config.data_dir.join("vms")).await?;
         tokio::fs::create_dir_all(self.config.data_dir.join("machines")).await?;
+
+        // Register the USB accessory listener (macOS 27+; degrades to a
+        // no-op elsewhere). Registered even in VM-host-only mode so grants
+        // accumulate before the System VM's first boot.
+        self.usb_manager.start(&self.event_bus).await;
 
         // VM-host-only mode: skip the entire Linux/Docker system-VM bootstrap.
         // The Linux VM never boots (so no lifecycle actor and no idle balloon

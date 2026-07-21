@@ -30,6 +30,9 @@ pub use vm::DarwinVm;
 /// datapath from this before the device exists (see `arcbox-vz`).
 pub use arcbox_vz::desired_network_mtu;
 
+/// USB passthrough types and support probe (macOS 27+, see `arcbox-vz`).
+pub use arcbox_vz::{UsbAccessory, UsbDevice, usb_passthrough_supported};
+
 /// Checks if virtualization is supported on this system.
 ///
 /// Uses `arcbox-vz` to query the Virtualization.framework.

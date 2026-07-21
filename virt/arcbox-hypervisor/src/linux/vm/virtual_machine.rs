@@ -6,8 +6,10 @@ use crate::{
     types::{DeviceSnapshot, VirtioDeviceConfig},
 };
 
+use crate::linux::KvmVcpu;
+
 use super::virtio::{VIRTIO_MMIO_SIZE, bincode_serialize_device_config};
-use super::{KvmMemory, KvmVcpu, KvmVm, VirtioDeviceInfo, VmState};
+use super::{KvmMemory, KvmVm, VirtioDeviceInfo, VmState};
 
 impl VirtualMachine for KvmVm {
     type Vcpu = KvmVcpu;

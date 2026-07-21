@@ -208,6 +208,7 @@ fn run() -> Result<(), String> {
         guest_cid: Some(GUEST_CID),
         balloon: knobs.balloon,
         block_devices,
+        usb: false,
         // The daemon's System VM carries a second (bridge) NIC; a fixed
         // locally-administered MAC is enough to materialize the device.
         bridge_nic_mac: knobs.bridge.then(|| "02:AB:CD:00:00:99".to_string()),
@@ -479,9 +480,18 @@ fn set_socket_timeout(fd: std::os::unix::io::RawFd, timeout: Duration) -> Result
     Ok(())
 }
 
+/// Non-macOS stub: the DAX window is a Hypervisor.framework feature, and
+/// this binary only ever runs on macOS — the stub exists so the crate
+/// still compiles on Linux.
+#[cfg(not(target_os = "macos"))]
+fn dax_round_trip(_vmm: &Vmm, _fixture: &DaxFixture) -> Result<(), String> {
+    Err("DAX end-to-end requires the macOS HV backend".into())
+}
+
 /// Exercises the DAX path end-to-end: host writes a known pattern to a
 /// file on the VirtioFS share; guest `mmap(MAP_SHARED)`s it and returns
 /// the bytes; we compare. Then verify the host's `DaxStats` counters.
+#[cfg(target_os = "macos")]
 fn dax_round_trip(vmm: &Vmm, fixture: &DaxFixture) -> Result<(), String> {
     let before = vmm
         .dax_stats(1)

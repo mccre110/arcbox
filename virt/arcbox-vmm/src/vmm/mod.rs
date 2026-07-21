@@ -344,6 +344,7 @@ impl Vmm {
             hv_console_worker: None,
             #[cfg(target_os = "macos")]
             hv_net_fd: None,
+            #[cfg(target_os = "macos")]
             hv_bridge_net_fd: None,
             #[cfg(target_os = "macos")]
             hv_blk_devices: Vec::new(),

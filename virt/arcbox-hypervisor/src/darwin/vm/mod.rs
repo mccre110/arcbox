@@ -31,6 +31,9 @@ static VM_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// The guest arcbox-agent listens on this port and handles incoming IRQ signals.
 const VSOCK_IRQ_SIGNAL_PORT: u32 = 1025;
 
+/// Timeout for runtime USB attach/detach completions.
+const USB_OPERATION_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// Virtual machine state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VmState {
@@ -91,6 +94,12 @@ pub struct DarwinVm {
     /// The balloon device configuration is stored here during VM setup
     /// and added to the VZ configuration in `finalize_configuration()`.
     balloon_configured: bool,
+    /// Whether a USB (XHCI) controller has been requested.
+    ///
+    /// Recorded during VM setup and added to the VZ configuration in
+    /// `finalize_configuration()` — required before USB devices can be
+    /// hot-plugged at runtime (macOS 27+).
+    usb_configured: bool,
     /// When true, `Drop` will skip calling `self.stop()`. Used when the
     /// guest has already halted and the VF stop path would crash.
     skip_stop_on_drop: bool,
@@ -189,6 +198,7 @@ impl DarwinVm {
             device_configs: Vec::new(),
             vsock_irq_fd: RwLock::new(None),
             balloon_configured: false,
+            usb_configured: false,
             skip_stop_on_drop: false,
         })
     }
@@ -262,6 +272,17 @@ impl DarwinVm {
             })?;
             vz_config.add_memory_balloon_device(balloon);
             tracing::debug!("Balloon device configured for VM {}", self.id);
+        }
+
+        // Add a USB (XHCI) controller if requested.
+        if self.usb_configured {
+            let controller = arcbox_vz::UsbControllerConfiguration::new().map_err(|e| {
+                HypervisorError::DeviceError(format!(
+                    "Failed to create USB controller configuration: {e}"
+                ))
+            })?;
+            vz_config.add_usb_controller(controller);
+            tracing::debug!("USB controller configured for VM {}", self.id);
         }
 
         // Build the VM. This validates configuration internally and creates
@@ -784,6 +805,93 @@ impl DarwinVm {
     #[must_use]
     pub const fn configured_memory_size(&self) -> u64 {
         self.config.memory_size
+    }
+
+    // USB Passthrough Interface (macOS 27+)
+    //
+    // A USB (XHCI) controller is added to the VM configuration before start;
+    // granted host accessories are then hot-plugged at runtime through the
+    // Accessory Access framework (see arcbox-vz::usb).
+
+    /// Requests a USB (XHCI) controller for this VM.
+    ///
+    /// Must be called before the VM starts; the controller is added to the
+    /// VZ configuration in `finalize_configuration()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the VM is not in the `Created` state.
+    pub fn enable_usb_controller(&mut self) -> Result<(), HypervisorError> {
+        let state = self.state();
+        if state != VmState::Created {
+            return Err(HypervisorError::DeviceError(
+                "Cannot enable USB controller: VM not in Created state".to_string(),
+            ));
+        }
+        self.usb_configured = true;
+        tracing::debug!("USB controller requested for VM {}", self.id);
+        Ok(())
+    }
+
+    /// Returns whether a USB controller is configured for this VM.
+    #[must_use]
+    pub const fn has_usb_controller(&self) -> bool {
+        self.usb_configured
+    }
+
+    /// Attaches a granted USB accessory to the running VM (hot-plug).
+    ///
+    /// Returns the attached device handle, needed for
+    /// [`detach_usb_device`](Self::detach_usb_device).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the VM is not running, no USB controller is
+    /// configured, or the framework rejects the attach.
+    pub fn attach_usb_device(
+        &self,
+        accessory: &arcbox_vz::UsbAccessory,
+    ) -> Result<arcbox_vz::UsbDevice, HypervisorError> {
+        let controller = self.usb_controller()?;
+        controller
+            .attach_blocking(accessory, USB_OPERATION_TIMEOUT)
+            .map_err(|e| HypervisorError::DeviceError(format!("USB attach failed: {e}")))
+    }
+
+    /// Detaches a previously attached USB device from the running VM.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the VM is not running, no USB controller is
+    /// configured, or the framework rejects the detach.
+    pub fn detach_usb_device(&self, device: &arcbox_vz::UsbDevice) -> Result<(), HypervisorError> {
+        let controller = self.usb_controller()?;
+        controller
+            .detach_blocking(device, USB_OPERATION_TIMEOUT)
+            .map_err(|e| HypervisorError::DeviceError(format!("USB detach failed: {e}")))
+    }
+
+    /// Resolves the running VM's first USB controller.
+    fn usb_controller(&self) -> Result<arcbox_vz::UsbController, HypervisorError> {
+        let state = self.state();
+        if state != VmState::Running {
+            return Err(HypervisorError::VmStateError {
+                expected: "Running".to_string(),
+                actual: format!("{state:?}"),
+            });
+        }
+        if !self.usb_configured {
+            return Err(HypervisorError::DeviceError(
+                "No USB controller configured".to_string(),
+            ));
+        }
+        let vz_vm = self
+            .vz_vm
+            .as_ref()
+            .ok_or_else(|| HypervisorError::DeviceError("VM not finalized".to_string()))?;
+        vz_vm.first_usb_controller().ok_or_else(|| {
+            HypervisorError::DeviceError("No USB controller found on running VM".to_string())
+        })
     }
 
     /// Adds a Rosetta x86_64 translation directory share to the VM.

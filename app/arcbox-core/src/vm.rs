@@ -192,6 +192,9 @@ impl VmManager {
                     read_only: bd.read_only,
                 })
                 .collect(),
+            // Effective only on the VZ backend when the host supports USB
+            // passthrough (macOS 27+); the VMM skips the controller otherwise.
+            usb: true,
             bridge_nic_mac: Some(bridge_nic_mac_for_vm_id(&entry.info.id)),
             // Backend is set per-machine on the `VmConfig`, read here at start.
             // `VmManager::set_backend` can change it on a stopped VM to switch
@@ -987,6 +990,79 @@ impl VmManager {
             .ok_or_else(|| CoreError::invalid_state("VMM not initialized"))?;
 
         Ok(vmm.get_balloon_stats())
+    }
+
+    /// Attaches a granted USB accessory to a running VM (hot-plug).
+    ///
+    /// VZ backend only. Blocks up to the framework completion timeout — call
+    /// from a blocking context. Returns the attached device handle, needed
+    /// for [`detach_usb`](Self::detach_usb).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the VM is not found, not running, not on the VZ
+    /// backend, or the framework rejects the attach.
+    #[cfg(target_os = "macos")]
+    pub fn attach_usb(
+        &self,
+        id: &VmId,
+        accessory: &arcbox_hypervisor::darwin::UsbAccessory,
+    ) -> Result<arcbox_hypervisor::darwin::UsbDevice> {
+        let vms = self.vms.read().map_err(|_| CoreError::LockPoisoned)?;
+
+        let entry = vms
+            .get(id)
+            .ok_or_else(|| CoreError::not_found(id.to_string()))?;
+
+        if entry.info.state != MachineState::Running {
+            return Err(CoreError::invalid_state(format!(
+                "cannot attach USB device: VM is {:?}",
+                entry.info.state
+            )));
+        }
+
+        let vmm = entry
+            .vmm
+            .as_ref()
+            .ok_or_else(|| CoreError::invalid_state("VMM not initialized"))?;
+
+        vmm.attach_usb_device(accessory).map_err(CoreError::from)
+    }
+
+    /// Detaches a previously attached USB device from a running VM.
+    ///
+    /// VZ backend only. Blocks up to the framework completion timeout — call
+    /// from a blocking context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the VM is not found, not running, not on the VZ
+    /// backend, or the framework rejects the detach.
+    #[cfg(target_os = "macos")]
+    pub fn detach_usb(
+        &self,
+        id: &VmId,
+        device: &arcbox_hypervisor::darwin::UsbDevice,
+    ) -> Result<()> {
+        let vms = self.vms.read().map_err(|_| CoreError::LockPoisoned)?;
+
+        let entry = vms
+            .get(id)
+            .ok_or_else(|| CoreError::not_found(id.to_string()))?;
+
+        if entry.info.state != MachineState::Running {
+            return Err(CoreError::invalid_state(format!(
+                "cannot detach USB device: VM is {:?}",
+                entry.info.state
+            )));
+        }
+
+        let vmm = entry
+            .vmm
+            .as_ref()
+            .ok_or_else(|| CoreError::invalid_state("VMM not initialized"))?;
+
+        vmm.detach_usb_device(device).map_err(CoreError::from)
     }
 
     /// Captures a debug snapshot (virtio queue state + vCPU exit

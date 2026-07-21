@@ -310,6 +310,7 @@ impl VmBuilder {
                     read_only: cfg.read_only,
                 })
                 .collect(),
+            usb: true,
             bridge_nic_mac: None,
             backend: crate::VmBackend::default(),
             debug_console_socket: None,

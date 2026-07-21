@@ -186,15 +186,25 @@ impl BalloonDeps for RealBalloonDeps {
     }
 
     fn set_balloon_target(&self, bytes: u64) -> Result<()> {
-        let info = self
-            .shared
-            .machine_manager
-            .get(&self.shared.machine_name)
-            .ok_or_else(|| CoreError::Machine("machine record missing".to_string()))?;
-        self.shared
-            .machine_manager
-            .vm_manager()
-            .set_balloon_target(&info.vm_id, bytes)
+        #[cfg(target_os = "macos")]
+        {
+            let info = self
+                .shared
+                .machine_manager
+                .get(&self.shared.machine_name)
+                .ok_or_else(|| CoreError::Machine("machine record missing".to_string()))?;
+            self.shared
+                .machine_manager
+                .vm_manager()
+                .set_balloon_target(&info.vm_id, bytes)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = bytes;
+            Err(CoreError::invalid_state(
+                "runtime balloon control is not supported on this platform",
+            ))
+        }
     }
 
     /// Any failure (connect, RPC, timeout) folds to `None`: the policy treats

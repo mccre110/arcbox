@@ -18,6 +18,7 @@ mod runtime;
 mod sandbox;
 mod stats;
 mod system_info;
+mod usb;
 mod vsock;
 
 pub use agent::Agent;

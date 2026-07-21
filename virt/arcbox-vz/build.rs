@@ -30,6 +30,8 @@ fn main() {
 
     println!("cargo:rerun-if-changed=shim/Package.swift");
     println!("cargo:rerun-if-changed=shim/Sources");
+    // USB passthrough support depends on which SDK the final linker uses.
+    println!("cargo:rerun-if-env-changed=SDKROOT");
 
     let have_swiftc = xcrun()
         .args(["--find", "swiftc"])
@@ -56,8 +58,39 @@ fn main() {
     let pkg = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("shim");
     let scratch = PathBuf::from(env::var("OUT_DIR").unwrap()).join("swiftpm-scratch");
 
+    // The SDK the Swift shim compiles against (toolchain default — SDKROOT is
+    // scrubbed for Swift invocations, see xcrun()).
+    let swift_sdk = {
+        let sdk = xcrun()
+            .args(["--sdk", "macosx", "--show-sdk-path"])
+            .output()
+            .expect("failed to spawn `xcrun --show-sdk-path`");
+        assert!(sdk.status.success(), "xcrun --show-sdk-path failed");
+        String::from_utf8(sdk.stdout).unwrap().trim().to_string()
+    };
+    // The SDK the FINAL linker resolves .tbd stubs against (SDKROOT when set
+    // — e.g. the devenv nix SDK — else the toolchain default above).
+    let linker_sdk = env::var("SDKROOT")
+        .ok()
+        .filter(|s| PathBuf::from(s).is_dir())
+        .unwrap_or_else(|| swift_sdk.clone());
+
+    // USB passthrough needs the macOS 27 SDK on BOTH sides: the Swift compile
+    // (AccessoryAccess + VZUSBPassthrough* declarations — canImport gates
+    // this) and the final link (the older Virtualization.tbd lacks the new
+    // symbols). AccessoryAccess.framework's presence is the proxy for a
+    // macOS 27+ SDK. When the compile SDK has it but the linker SDK does not,
+    // -D ARCBOX_USB_DISABLED compiles the USB entry points to "unsupported"
+    // stubs so the link stays resolvable (see Usb.swift).
+    let has_usb_framework = |sdk: &str| {
+        PathBuf::from(sdk)
+            .join("System/Library/Frameworks/AccessoryAccess.framework")
+            .is_dir()
+    };
+    let usb_enabled = has_usb_framework(&swift_sdk) && has_usb_framework(&linker_sdk);
+
     // Shared by `build` and `--show-bin-path` so both resolve the same layout.
-    let common = [
+    let mut common = vec![
         "--package-path",
         pkg.to_str().unwrap(),
         "--scratch-path",
@@ -69,10 +102,14 @@ fn main() {
         "--product",
         "ArcBoxVZShim",
     ];
+    if has_usb_framework(&swift_sdk) && !usb_enabled {
+        common.extend(["-Xswiftc", "-DARCBOX_USB_DISABLED"]);
+    }
+    let common = common;
 
     let out = xcrun()
         .args(["swift", "build"])
-        .args(common)
+        .args(&common)
         .output()
         .expect("failed to spawn `xcrun swift build`");
     assert!(
@@ -84,7 +121,7 @@ fn main() {
 
     let bin = xcrun()
         .args(["swift", "build"])
-        .args(common)
+        .args(&common)
         .arg("--show-bin-path")
         .output()
         .expect("failed to spawn `xcrun swift build --show-bin-path`");
@@ -107,21 +144,7 @@ fn main() {
     // it additionally needs an rpath to /usr/lib/swift on the FINAL binary —
     // provided workspace-wide in `.cargo/config.toml` (a build-script link
     // arg here would not propagate to downstream binaries).
-    let swift_stub_dir = env::var("SDKROOT")
-        .ok()
-        .map(|s| format!("{s}/usr/lib/swift"))
-        .filter(|p| PathBuf::from(p).is_dir())
-        .unwrap_or_else(|| {
-            let sdk = xcrun()
-                .args(["--sdk", "macosx", "--show-sdk-path"])
-                .output()
-                .expect("failed to spawn `xcrun --show-sdk-path`");
-            assert!(sdk.status.success(), "xcrun --show-sdk-path failed");
-            format!(
-                "{}/usr/lib/swift",
-                String::from_utf8(sdk.stdout).unwrap().trim()
-            )
-        });
+    let swift_stub_dir = format!("{linker_sdk}/usr/lib/swift");
 
     println!("cargo:rustc-link-search=native={}", bin_path.display());
     println!("cargo:rustc-link-lib=static=ArcBoxVZShim");
@@ -135,6 +158,14 @@ fn main() {
     // runtime dlopen of Virtualization.framework.
     println!("cargo:rustc-link-lib=framework=Virtualization");
     println!("cargo:rustc-link-lib=framework=Foundation");
+    if usb_enabled {
+        // Every AccessoryAccess reference sits behind #available(macOS 27)
+        // in the shim, so ld marks them all weak_import and auto-weakens the
+        // framework load command (LC_LOAD_WEAK_DYLIB) — the binary still
+        // launches on the macOS 13 deployment floor. Verify with
+        // `otool -L <binary> | grep AccessoryAccess` (must say "weak").
+        println!("cargo:rustc-link-lib=framework=AccessoryAccess");
+    }
 }
 
 /// Swift runtime libraries the shim's objects autolink (`LC_LINKER_OPTION`).

@@ -67,6 +67,7 @@ pub mod system;
 pub mod top;
 #[cfg(target_os = "macos")]
 pub mod uninstall;
+pub mod usb;
 pub mod version;
 
 /// ArcBox - High-performance container and VM runtime
@@ -141,6 +142,10 @@ pub enum Commands {
     /// Manage the single System VM (hypervisor backend)
     #[command(subcommand)]
     System(system::SystemCommands),
+
+    /// Manage USB passthrough to the System VM (macOS 27+, VZ backend)
+    #[command(subcommand)]
+    Usb(usb::UsbCommands),
 
     /// Manage boot assets (kernel/rootfs)
     #[command(subcommand)]

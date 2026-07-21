@@ -8,15 +8,18 @@ use std::sync::Arc;
 
 use arcbox_grpc::SystemService;
 use arcbox_protocol::v1::{
-    Empty, ResolveContainerFsRequest, ResolveContainerFsResponse, ResolveImageFsRequest,
+    AttachUsbDeviceRequest, AttachUsbDeviceResponse, DetachUsbDeviceRequest,
+    DetachUsbDeviceResponse, Empty, ListUsbDevicesRequest, ListUsbDevicesResponse,
+    ResolveContainerFsRequest, ResolveContainerFsResponse, ResolveImageFsRequest,
     ResolveImageFsResponse, SetSystemVmBackendRequest, SetupStatus, SystemVmBackend,
-    SystemVmBackendInfo, VcpuDebug, VirtioDebugInfo, VirtioDeviceDebug, VirtioQueueDebug,
-    setup_status,
+    SystemVmBackendInfo, UsbDevice, UsbDeviceSelector, VcpuDebug, VirtioDebugInfo,
+    VirtioDeviceDebug, VirtioQueueDebug, setup_status,
 };
 use tokio::sync::watch;
 use tokio_stream::Stream;
 use tonic::{Request, Response, Status};
 
+use crate::ApiError;
 use crate::grpc::{SharedRuntime, SharedRuntimeExt};
 
 /// Shared state tracking daemon startup progress.
@@ -143,6 +146,35 @@ fn backend_to_proto(backend: arcbox_core::VmBackend) -> SystemVmBackend {
     match backend {
         arcbox_core::VmBackend::Hv => SystemVmBackend::Hv,
         arcbox_core::VmBackend::Vz => SystemVmBackend::Vz,
+    }
+}
+
+/// Parses the wire USB selector into the core selector. (Both types are
+/// foreign to this crate, so this cannot be a `From` impl.)
+fn usb_selector_from_proto(
+    selector: Option<UsbDeviceSelector>,
+) -> Result<arcbox_core::UsbSelector, Status> {
+    let selector = selector.ok_or_else(|| Status::invalid_argument("selector is required"))?;
+    let vendor_id = u16::try_from(selector.vendor_id)
+        .map_err(|_| Status::invalid_argument("vendor_id must fit in 16 bits"))?;
+    let product_id = u16::try_from(selector.product_id)
+        .map_err(|_| Status::invalid_argument("product_id must fit in 16 bits"))?;
+    Ok(arcbox_core::UsbSelector {
+        vendor_id,
+        product_id,
+        serial: (!selector.serial.is_empty()).then_some(selector.serial),
+    })
+}
+
+/// Maps a core USB accessory snapshot to the wire message.
+fn usb_device_to_proto(snapshot: arcbox_core::UsbDeviceSnapshot) -> UsbDevice {
+    UsbDevice {
+        vendor_id: u32::from(snapshot.info.vendor_id),
+        product_id: u32::from(snapshot.info.product_id),
+        name: snapshot.info.name.unwrap_or_default(),
+        serial: snapshot.info.serial.unwrap_or_default(),
+        attached: snapshot.attached,
+        guest_path: snapshot.guest_path.unwrap_or_default(),
     }
 }
 
@@ -337,6 +369,48 @@ impl SystemService for SystemServiceImpl {
         Ok(Response::new(ResolveImageFsResponse {
             lower_dirs: paths.lower_dirs,
         }))
+    }
+
+    async fn list_usb_devices(
+        &self,
+        _request: Request<ListUsbDevicesRequest>,
+    ) -> Result<Response<ListUsbDevicesResponse>, Status> {
+        let runtime = self.runtime.ready()?;
+        let devices = runtime
+            .list_usb_devices()
+            .await
+            .into_iter()
+            .map(usb_device_to_proto)
+            .collect();
+        Ok(Response::new(ListUsbDevicesResponse { devices }))
+    }
+
+    async fn attach_usb_device(
+        &self,
+        request: Request<AttachUsbDeviceRequest>,
+    ) -> Result<Response<AttachUsbDeviceResponse>, Status> {
+        let selector = usb_selector_from_proto(request.into_inner().selector)?;
+        let runtime = self.runtime.ready()?;
+        runtime
+            .usb_manager()
+            .attach(&selector)
+            .await
+            .map_err(ApiError::from)?;
+        Ok(Response::new(AttachUsbDeviceResponse {}))
+    }
+
+    async fn detach_usb_device(
+        &self,
+        request: Request<DetachUsbDeviceRequest>,
+    ) -> Result<Response<DetachUsbDeviceResponse>, Status> {
+        let selector = usb_selector_from_proto(request.into_inner().selector)?;
+        let runtime = self.runtime.ready()?;
+        runtime
+            .usb_manager()
+            .detach(&selector)
+            .await
+            .map_err(ApiError::from)?;
+        Ok(Response::new(DetachUsbDeviceResponse {}))
     }
 
     async fn set_system_vm_backend(

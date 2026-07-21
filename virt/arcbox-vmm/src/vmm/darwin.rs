@@ -163,6 +163,18 @@ impl Vmm {
             tracing::info!("Added memory balloon device");
         }
 
+        // Add a USB (XHCI) controller if enabled and the host supports USB
+        // passthrough (macOS 27+ Accessory Access). Devices are hot-plugged
+        // at runtime via attach_usb_device.
+        if self.config.usb {
+            if arcbox_hypervisor::darwin::usb_passthrough_supported() {
+                vm.enable_usb_controller()?;
+                tracing::info!("Added USB (XHCI) controller");
+            } else {
+                tracing::debug!("USB passthrough not supported on this host; controller skipped");
+            }
+        }
+
         // Initialize memory manager
         let mut memory_manager = MemoryManager::new();
         memory_manager.initialize(self.config.memory_size)?;
@@ -693,6 +705,47 @@ impl Vmm {
                 .as_ref()
                 .map_or(0, DarwinVm::get_balloon_target_memory),
         }
+    }
+
+    /// Attaches a granted USB accessory to the running VM (hot-plug).
+    ///
+    /// VZ backend only — the HV backend has no USB controller. Returns the
+    /// attached device handle, needed for
+    /// [`detach_usb_device`](Self::detach_usb_device).
+    pub fn attach_usb_device(
+        &self,
+        accessory: &arcbox_hypervisor::darwin::UsbAccessory,
+    ) -> Result<arcbox_hypervisor::darwin::UsbDevice> {
+        let vm = self.usb_capable_vm()?;
+        vm.attach_usb_device(accessory)
+            .map_err(VmmError::Hypervisor)
+    }
+
+    /// Detaches a previously attached USB device from the running VM.
+    ///
+    /// VZ backend only — the HV backend has no USB controller.
+    pub fn detach_usb_device(&self, device: &arcbox_hypervisor::darwin::UsbDevice) -> Result<()> {
+        let vm = self.usb_capable_vm()?;
+        vm.detach_usb_device(device).map_err(VmmError::Hypervisor)
+    }
+
+    /// Resolves the running VZ-backed VM for USB operations.
+    fn usb_capable_vm(&self) -> Result<&arcbox_hypervisor::darwin::DarwinVm> {
+        if self.state != VmmState::Running {
+            return Err(VmmError::invalid_state(format!(
+                "cannot perform USB operation: VMM is {:?}",
+                self.state
+            )));
+        }
+        if self.config.backend != VmBackend::Vz {
+            // invalid_state so the API layer maps it to FAILED_PRECONDITION.
+            return Err(VmmError::invalid_state(
+                "USB passthrough is not supported on the HV backend; switch the System VM to VZ",
+            ));
+        }
+        self.darwin_vm
+            .as_ref()
+            .ok_or_else(|| VmmError::invalid_state("no DarwinVm".to_string()))
     }
 
     /// Gets balloon statistics.

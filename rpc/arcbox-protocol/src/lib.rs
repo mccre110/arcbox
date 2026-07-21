@@ -94,16 +94,16 @@ pub mod image {
 pub mod agent {
     pub use super::v1::{
         AgentPingRequest, AgentPingResponse, ContainerFsPathsRequest, ContainerFsPathsResponse,
-        ContainerStats, DiskTrimRequest, DiskTrimResponse, ImageFsPathsRequest,
+        ContainerStats, DiskTrimRequest, DiskTrimResponse, GuestUsbDevice, ImageFsPathsRequest,
         ImageFsPathsResponse, KubernetesDeleteRequest, KubernetesDeleteResponse,
         KubernetesKubeconfigRequest, KubernetesKubeconfigResponse, KubernetesStartRequest,
         KubernetesStartResponse, KubernetesStatusRequest, KubernetesStatusResponse,
-        KubernetesStopRequest, KubernetesStopResponse, MachineStats, MemoryPressureEvent,
-        MmapReadFileRequest, MmapReadFileResponse, PortBindingsChanged, PortBindingsRemoved,
-        ReadinessEvent, RuntimeEnsureRequest, RuntimeEnsureResponse, RuntimeStatusRequest,
-        RuntimeStatusResponse, ServiceStatus, ShutdownRequest, ShutdownResponse, SystemInfo,
-        WatchMemoryPressureRequest, WatchReadinessRequest, WatchStatsRequest,
-        memory_pressure_event, readiness_event,
+        KubernetesStopRequest, KubernetesStopResponse, ListGuestUsbDevicesRequest,
+        ListGuestUsbDevicesResponse, MachineStats, MemoryPressureEvent, MmapReadFileRequest,
+        MmapReadFileResponse, PortBindingsChanged, PortBindingsRemoved, ReadinessEvent,
+        RuntimeEnsureRequest, RuntimeEnsureResponse, RuntimeStatusRequest, RuntimeStatusResponse,
+        ServiceStatus, ShutdownRequest, ShutdownResponse, SystemInfo, WatchMemoryPressureRequest,
+        WatchReadinessRequest, WatchStatsRequest, memory_pressure_event, readiness_event,
     };
 
     // Backward compatibility type aliases (short names without Agent prefix).
@@ -134,10 +134,12 @@ pub mod api {
 
     // System service types
     pub use super::v1::{
-        Event, EventActor, EventsRequest, GetInfoRequest, GetInfoResponse, GetVersionRequest,
-        GetVersionResponse, PruneRequest, PruneResponse, ResolveContainerFsRequest,
-        ResolveContainerFsResponse, ResolveImageFsRequest, ResolveImageFsResponse,
-        SystemPingRequest, SystemPingResponse,
+        AttachUsbDeviceRequest, AttachUsbDeviceResponse, DetachUsbDeviceRequest,
+        DetachUsbDeviceResponse, Event, EventActor, EventsRequest, GetInfoRequest, GetInfoResponse,
+        GetVersionRequest, GetVersionResponse, ListUsbDevicesRequest, ListUsbDevicesResponse,
+        PruneRequest, PruneResponse, ResolveContainerFsRequest, ResolveContainerFsResponse,
+        ResolveImageFsRequest, ResolveImageFsResponse, SystemPingRequest, SystemPingResponse,
+        UsbDevice, UsbDeviceSelector,
     };
 
     // Volume service types
@@ -206,10 +208,12 @@ pub use v1::{
 
 // API types - System
 pub use v1::{
-    Event, EventActor, EventsRequest, GetInfoRequest, GetInfoResponse, GetVersionRequest,
-    GetVersionResponse, PruneRequest, PruneResponse, ResolveContainerFsRequest,
-    ResolveContainerFsResponse, ResolveImageFsRequest, ResolveImageFsResponse, SystemPingRequest,
-    SystemPingResponse,
+    AttachUsbDeviceRequest, AttachUsbDeviceResponse, DetachUsbDeviceRequest,
+    DetachUsbDeviceResponse, Event, EventActor, EventsRequest, GetInfoRequest, GetInfoResponse,
+    GetVersionRequest, GetVersionResponse, ListUsbDevicesRequest, ListUsbDevicesResponse,
+    PruneRequest, PruneResponse, ResolveContainerFsRequest, ResolveContainerFsResponse,
+    ResolveImageFsRequest, ResolveImageFsResponse, SystemPingRequest, SystemPingResponse,
+    UsbDevice, UsbDeviceSelector,
 };
 
 // API types - Volume

@@ -602,17 +602,17 @@ impl LinuxFirewall {
             &rule.out_interface,
         ];
 
+        let target;
         match rule.nat_type {
             NatType::Masquerade => {
                 args.extend(&["-j", "MASQUERADE"]);
             }
             NatType::Snat => {
-                let target = format!(
+                target = format!(
                     "--to-source {}",
                     rule.snat_addr.expect("SNAT requires snat_addr")
                 );
-                args.extend(&["-j", "SNAT"]);
-                args.push(&target);
+                args.extend(&["-j", "SNAT", &target]);
             }
         }
 
