@@ -77,6 +77,7 @@ impl NetRxWorkerSlot {
     }
 
     /// Returns the stored host fd without removing it.
+    #[cfg(target_os = "macos")]
     fn get_host_fd(&self) -> Option<i32> {
         *self
             .host_fd
@@ -256,38 +257,44 @@ impl NetRxWorkerSlot {
             return;
         }
 
-        // Fallback: legacy net_rx_worker (kqueue on socketpair fd).
-        let Some(net_fd) = self.get_host_fd() else {
-            tracing::warn!("net-io: no host fd available for primary VirtioNet");
-            return;
-        };
-
-        let ctx = crate::net_rx_worker::NetRxWorkerContext {
-            net_host_fd: net_fd,
-            guest_mem,
-            rx_queue: queue,
-            event_idx: event_idx_enabled,
-            mmio_state: mmio_arc.clone(),
-            irq_callback,
-            irq,
-            exit_vcpus,
-            running,
-        };
-
-        match std::thread::Builder::new()
-            .name("net-io".to_string())
-            .spawn(move || crate::net_rx_worker::net_rx_worker_loop(ctx))
+        // Fallback: legacy net_rx_worker (kqueue on socketpair fd) —
+        // macOS-only, like the custom-HV datapath that feeds it.
+        #[cfg(target_os = "macos")]
         {
-            Ok(handle) => {
-                *self
-                    .handle
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(handle);
-                tracing::info!("Spawned net-io worker thread for primary VirtioNet (legacy)");
-            }
-            Err(e) => {
-                tracing::error!("Failed to spawn net-io worker thread: {e}");
+            let Some(net_fd) = self.get_host_fd() else {
+                tracing::warn!("net-io: no host fd available for primary VirtioNet");
+                return;
+            };
+
+            let ctx = crate::net_rx_worker::NetRxWorkerContext {
+                net_host_fd: net_fd,
+                guest_mem,
+                rx_queue: queue,
+                event_idx: event_idx_enabled,
+                mmio_state: mmio_arc.clone(),
+                irq_callback,
+                irq,
+                exit_vcpus,
+                running,
+            };
+
+            match std::thread::Builder::new()
+                .name("net-io".to_string())
+                .spawn(move || crate::net_rx_worker::net_rx_worker_loop(ctx))
+            {
+                Ok(handle) => {
+                    *self
+                        .handle
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(handle);
+                    tracing::info!("Spawned net-io worker thread for primary VirtioNet (legacy)");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to spawn net-io worker thread: {e}");
+                }
             }
         }
+        #[cfg(not(target_os = "macos"))]
+        tracing::warn!("net-io: no RX inject channel and the legacy worker is macOS-only");
     }
 }

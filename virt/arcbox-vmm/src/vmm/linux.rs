@@ -18,12 +18,15 @@ use crate::fdt::{FdtConfig, generate_fdt};
 impl Vmm {
     /// Linux-specific initialization using KVM.
     pub(super) fn initialize_linux(&mut self) -> Result<()> {
-        use arcbox_hypervisor::linux::KvmVm;
+        use crate::irq::{Gsi, IrqTriggerCallback};
+        use arcbox_hypervisor::linux::{KvmHypervisor, KvmVm};
         use arcbox_hypervisor::traits::{Hypervisor, VirtualMachine};
         use std::sync::Mutex;
 
-        // Create hypervisor and VM
-        let hypervisor = arcbox_hypervisor::create_hypervisor()?;
+        // Create hypervisor and VM. The concrete KvmHypervisor is used (not
+        // create_hypervisor's opaque type) so `vm` is nameable as KvmVm for
+        // the Arc<Mutex<..>> the IRQ callback captures.
+        let hypervisor = KvmHypervisor::new()?;
         let vm_config = self.config.to_vm_config();
 
         tracing::debug!("Platform capabilities: {:?}", hypervisor.capabilities());

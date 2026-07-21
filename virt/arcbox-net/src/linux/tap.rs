@@ -379,7 +379,7 @@ impl LinuxTap {
             if err.kind() == io::ErrorKind::WouldBlock {
                 return Ok(0);
             }
-            return Err(NetError::Io(err));
+            return Err(NetError::io(err));
         }
 
         Ok(ret as usize)
@@ -400,7 +400,7 @@ impl LinuxTap {
             if err.kind() == io::ErrorKind::WouldBlock {
                 return Ok(0);
             }
-            return Err(NetError::Io(err));
+            return Err(NetError::io(err));
         }
 
         Ok(ret as usize)
@@ -431,7 +431,7 @@ impl NetworkBackend for LinuxTap {
             if err.kind() == io::ErrorKind::WouldBlock {
                 return Ok(0);
             }
-            return Err(NetError::Io(err));
+            return Err(NetError::io(err));
         }
 
         Ok(ret as usize)
@@ -445,7 +445,7 @@ impl NetworkBackend for LinuxTap {
             if err.kind() == io::ErrorKind::WouldBlock {
                 return Ok(0);
             }
-            return Err(NetError::Io(err));
+            return Err(NetError::io(err));
         }
 
         Ok(ret as usize)
