@@ -48,6 +48,7 @@ pub mod route_reconciler;
 pub mod runtime;
 pub mod stats_hub;
 pub mod trace;
+pub mod usb;
 pub mod vm;
 pub mod vm_lifecycle;
 
@@ -70,6 +71,7 @@ pub use macos::{
 pub use macos::{PullPhase, PullSource};
 pub use migration::MigrationManager;
 pub use runtime::{Runtime, SandboxPortExposure};
+pub use usb::{GuestUsbDevice, UsbDeviceInfo, UsbDeviceSnapshot, UsbSelector};
 pub use vm::{SharedDirConfig, VmConfig, VmManager};
 pub use vm_lifecycle::{
     ActivityScope, DEFAULT_MACHINE_NAME, DefaultVmConfig, HealthMonitor, VmLifecycleConfig,
